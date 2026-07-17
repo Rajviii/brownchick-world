@@ -31,6 +31,7 @@ model User {
   userProgress UserProgress?
   accounts     Account[]
   sessions     Session[]
+  quizAttempts QuizAttempt[]
 }
 
 model UserProgress {
@@ -125,6 +126,7 @@ model Country {
   languages    CountryLanguage[]
   trivia       CountryTrivia[]
   questions    Question[]
+  quizzes      Quiz[]
   sortOrder    Int               @default(0)
 
   @@index([name])
@@ -199,7 +201,7 @@ model CountryTrivia {
   countryId    String   @db.Uuid
   title        String
   fact         String   @db.Text
-  displayOrder Int
+  displayOrder Int      @default(0)
   isPublished  Boolean  @default(true) // Allows draft trivia facts to be written and managed safely
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -241,6 +243,7 @@ model Category {
 
   // Relations
   questions Question[]
+  quizzes   Quiz[]
 
   @@index([displayOrder])
 }
@@ -263,9 +266,11 @@ model Question {
   updatedAt            DateTime     @updatedAt
 
   // Relations
-  category Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  country  Country?         @relation(fields: [countryId], references: [id], onDelete: SetNull)
-  options  QuestionOption[]
+  category      Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  country       Country?         @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  options       QuestionOption[]
+  quizQuestions QuizQuestion[]
+  quizAnswers   QuizAnswer[]
 
   @@index([categoryId])
   @@index([countryId])
@@ -284,8 +289,117 @@ model QuestionOption {
   updatedAt    DateTime @updatedAt
 
   // Relations
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  question    Question     @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  quizAnswers QuizAnswer[]
 
   @@unique([questionId, displayOrder]) // Enforces display order uniqueness within each question
+  @@index([questionId])
+}
+
+// ==========================================
+// MODULE 4: Quiz Engine
+// ==========================================
+
+enum QuizType {
+  DAILY
+  COUNTRY
+  CATEGORY
+  MIXED
+  CUSTOM
+}
+
+enum QuizStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Quiz {
+  id               String      @id @default(uuid()) @db.Uuid
+  title            String
+  slug             String      @unique
+  description      String?     @db.Text
+  quizType         QuizType
+  status           QuizStatus  @default(DRAFT) // Better state tracking than boolean flags
+  categoryId       String?     @db.Uuid
+  countryId        String?     @db.Uuid
+  difficulty       Difficulty?
+  totalQuestions   Int
+  timeLimitSeconds Int?
+  passingScore     Int         @default(70)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  // Relations
+  category  Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  country   Country?       @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  @@index([quizType])
+  @@index([categoryId])
+  @@index([countryId])
+  @@index([status])
+}
+
+model QuizQuestion {
+  id           String   @id @default(uuid()) @db.Uuid
+  quizId       String   @db.Uuid
+  questionId   String   @db.Uuid
+  displayOrder Int
+  createdAt    DateTime @default(now())
+
+  // Relations
+  quiz     Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([quizId, questionId])
+  @@unique([quizId, displayOrder])
+  @@index([quizId])
+  @@index([questionId])
+}
+
+model QuizAttempt {
+  id               String      @id @default(uuid()) @db.Uuid
+  userId           String      @db.Uuid
+  quizId           String      @db.Uuid
+  score            Int
+  totalQuestions   Int
+  correctAnswers   Int
+  wrongAnswers     Int
+  percentage       Float
+  startedAt        DateTime    @default(now())
+  completedAt      DateTime?
+  timeTakenSeconds Int?
+  isCompleted      Boolean     @default(false)
+  difficulty       Difficulty? // Snapshots the played difficulty to preserve historical analytics
+
+  // Relations
+  user    User         @relation(fields: [userId], references: [id], onDelete: Restrict) // Protects historical data from deletion
+  quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Restrict) // Protects attempts if a quiz is deleted
+  answers QuizAnswer[]
+
+  @@index([userId])
+  @@index([quizId])
+  @@index([startedAt])
+  @@index([isCompleted])
+}
+
+model QuizAnswer {
+  id               String   @id @default(uuid()) @db.Uuid
+  quizAttemptId    String   @db.Uuid
+  questionId       String   @db.Uuid
+  selectedOptionId String?  @db.Uuid
+  textAnswer       String?  @db.Text
+  isCorrect        Boolean
+  answeredAt       DateTime @default(now())
+
+  // Relations
+  quizAttempt    QuizAttempt     @relation(fields: [quizAttemptId], references: [id], onDelete: Cascade)
+  question       Question        @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  selectedOption QuestionOption? @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+
+  @@unique([quizAttemptId, questionId])
+  @@index([quizAttemptId])
   @@index([questionId])
 }
