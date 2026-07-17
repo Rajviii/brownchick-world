@@ -124,7 +124,8 @@ model Country {
   currencies   CountryCurrency[]
   languages    CountryLanguage[]
   trivia       CountryTrivia[]
-  sortOrder Int @default(0)
+  questions    Question[]
+  sortOrder    Int               @default(0)
 
   @@index([name])
   @@index([slug])
@@ -209,3 +210,82 @@ model CountryTrivia {
   @@index([countryId]) // Optimizes lookup of trivia items by country
 }
 
+// ==========================================
+// MODULE 3: Question Bank
+// ==========================================
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  TEXT_INPUT
+  IMAGE_CHOICE
+}
+
+model Category {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @unique
+  slug         String   @unique
+  description  String?  @db.Text
+  icon         String?
+  color        String?
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  questions Question[]
+
+  @@index([displayOrder])
+}
+
+model Question {
+  id                   String       @id @default(uuid()) @db.Uuid
+  categoryId           String       @db.Uuid
+  countryId            String?      @db.Uuid
+  question             String       @db.Text
+  questionType         QuestionType @default(MULTIPLE_CHOICE)
+  explanation          String?      @db.Text
+  explanationImagePath String? // Stores relative asset path for explanations
+  hint                 String?      @db.Text
+  imagePath            String? // Stores relative asset path for the question (e.g., flags/map highlights)
+  difficulty           Difficulty
+  points               Int          @default(10)
+  timeLimitSeconds     Int          @default(20)
+  isActive             Boolean      @default(true)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  // Relations
+  category Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  country  Country?         @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  options  QuestionOption[]
+
+  @@index([categoryId])
+  @@index([countryId])
+  @@index([difficulty])
+  @@index([isActive])
+}
+
+model QuestionOption {
+  id           String   @id @default(uuid()) @db.Uuid
+  questionId   String   @db.Uuid
+  text         String?  @db.Text // Nullable to support image-only options without dummy text
+  imagePath    String? // Stores relative asset path for option images
+  isCorrect    Boolean
+  displayOrder Int      @default(0) // Default simplifies insertions
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, displayOrder]) // Enforces display order uniqueness within each question
+  @@index([questionId])
+}
