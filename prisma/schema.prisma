@@ -361,28 +361,34 @@ model QuizQuestion {
 
 model QuizAttempt {
   id               String      @id @default(uuid()) @db.Uuid
-  userId           String      @db.Uuid
+  userId           String?     @db.Uuid
   quizId           String      @db.Uuid
-  score            Int
+
+  score            Int         @default(0)
   totalQuestions   Int
-  correctAnswers   Int
-  wrongAnswers     Int
-  percentage       Float
+  correctAnswers   Int         @default(0)
+  wrongAnswers     Int         @default(0)
+  percentage       Float       @default(0)
+
   startedAt        DateTime    @default(now())
   completedAt      DateTime?
   timeTakenSeconds Int?
+
   isCompleted      Boolean     @default(false)
-  difficulty       Difficulty? // Snapshots the played difficulty to preserve historical analytics
+  isGuest          Boolean     @default(false)
+
+  difficulty       Difficulty?
 
   // Relations
-  user    User         @relation(fields: [userId], references: [id], onDelete: Restrict) // Protects historical data from deletion
-  quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Restrict) // Protects attempts if a quiz is deleted
-  answers QuizAnswer[]
+  user             User?        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  quiz             Quiz         @relation(fields: [quizId], references: [id], onDelete: Restrict)
+  answers          QuizAnswer[]
 
   @@index([userId])
   @@index([quizId])
   @@index([startedAt])
   @@index([isCompleted])
+  @@index([isGuest])
 }
 
 model QuizAnswer {

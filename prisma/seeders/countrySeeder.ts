@@ -243,7 +243,5 @@ export async function seedCountries() {
     logger.info(`Execution time: ${duration}ms`);
     logger.divider();
 
-    // Disconnect Prisma Client to close active pg connection pool handles
-    await prisma.$disconnect();
-    await pool.end();
+    // Disconnect of the pool will be handled by the main seed orchestrator
 }
