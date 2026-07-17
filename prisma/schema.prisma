@@ -89,3 +89,123 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
+
+// ==========================================
+// MODULE 2: Geography Core
+// ==========================================
+
+enum Continent {
+  AFRICA
+  ANTARCTICA
+  ASIA
+  EUROPE
+  NORTH_AMERICA
+  OCEANIA
+  SOUTH_AMERICA
+}
+
+model Country {
+  id           String            @id @default(uuid()) @db.Uuid
+  name         String
+  officialName String
+  slug         String            @unique
+  region       String?
+  iso2         String            @unique
+  iso3         String            @unique
+  capital      String[] // PostgreSQL text array to support multiple or disputed capitals
+  continent    Continent
+  flagEmoji    String
+  flagSvg      String // Stores the asset name/path rather than complete URLs to ensure portability
+  isActive     Boolean           @default(true) // Aligns with User.isActive consistency
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  // Relations
+  detail       CountryDetail?
+  currencies   CountryCurrency[]
+  languages    CountryLanguage[]
+  trivia       CountryTrivia[]
+  sortOrder Int @default(0)
+
+  @@index([name])
+  @@index([slug])
+}
+
+model CountryDetail {
+  id           String   @id @default(uuid()) @db.Uuid
+  countryId    String   @unique @db.Uuid
+  population   BigInt? // Using BigInt for future-proofing and avoiding 32-bit integer overflows
+  areaKm2      Float?
+  timezones    String[]
+  callingCodes String[]
+  internetTld  String?
+  drivingSide  String?
+  latitude     Float?
+  longitude    Float?
+  description  String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+}
+
+model Currency {
+  id     String @id @default(uuid()) @db.Uuid
+  code   String @unique
+  name   String
+  symbol String
+
+  // Relations
+  countries CountryCurrency[]
+}
+
+model CountryCurrency {
+  countryId  String @db.Uuid
+  currencyId String @db.Uuid
+
+  // Relations
+  country  Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  currency Currency @relation(fields: [currencyId], references: [id], onDelete: Cascade)
+
+  @@id([countryId, currencyId])
+  @@index([currencyId]) // Optimizes reverse lookups from Currency -> Country
+}
+
+model Language {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique
+  name String
+
+  // Relations
+  countries CountryLanguage[]
+}
+
+model CountryLanguage {
+  countryId  String  @db.Uuid
+  languageId String  @db.Uuid
+  isOfficial Boolean @default(false)
+
+  // Relations
+  country  Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [languageId], references: [id], onDelete: Cascade)
+
+  @@id([countryId, languageId])
+  @@index([languageId]) // Optimizes reverse lookups from Language -> Country
+}
+
+model CountryTrivia {
+  id           String   @id @default(uuid()) @db.Uuid
+  countryId    String   @db.Uuid
+  title        String
+  fact         String   @db.Text
+  displayOrder Int
+  isPublished  Boolean  @default(true) // Allows draft trivia facts to be written and managed safely
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  @@index([countryId]) // Optimizes lookup of trivia items by country
+}
+
